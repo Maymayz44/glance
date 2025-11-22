@@ -1,4 +1,4 @@
-project_name: ghcr.io/Maymayz44/glance
+project_name: ghcr.io/maymayz44/glance
 
 checksum:
   disable: true
@@ -21,7 +21,7 @@ builds:
     goarm:
       - 7
     ldflags:
-      - -s -w -X github.com/Maymayz44/glance/internal/glance.buildVersion={{ .Tag }}
+      - -s -w -X github.com/maymayz44/glance/internal/glance.buildVersion={{ .Tag }}
 
 archives:
   -
