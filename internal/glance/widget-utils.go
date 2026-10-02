@@ -51,7 +51,7 @@ func getBrowserUserAgentHeader() string {
 		userAgentPersistentVersion.Store(rand.Int32N(5))
 	}
 
-	version := strconv.Itoa(130 + int(userAgentPersistentVersion.Load()))
+	version := strconv.Itoa(148 + int(userAgentPersistentVersion.Load()))
 	return "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:" + version + ".0) Gecko/20100101 Firefox/" + version + ".0"
 }
 
@@ -132,10 +132,9 @@ func decodeXmlFromRequest[T any](client requestDoer, request *http.Request) (T, 
 	return result, nil
 }
 
-func decodeXmlFromRequestTask[T any](client requestDoer) func(*http.Request) (T, error) {
-	return func(request *http.Request) (T, error) {
-		return decodeXmlFromRequest[T](client, request)
-	}
+type cachedEntry[T any] struct {
+	value     T
+	timestamp time.Time
 }
 
 type workerPoolTask[I any, O any] struct {

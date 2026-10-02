@@ -33,8 +33,12 @@ type CustomAPIRequest struct {
 	BodyType           string               `yaml:"body-type"`
 	Body               any                  `yaml:"body"`
 	SkipJSONValidation bool                 `yaml:"skip-json-validation"`
-	bodyReader         io.ReadSeeker        `yaml:"-"`
-	httpRequest        *http.Request        `yaml:"-"`
+	BasicAuth          struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"basic-auth"`
+	bodyReader  io.ReadSeeker `yaml:"-"`
+	httpRequest *http.Request `yaml:"-"`
 }
 
 type customAPIWidget struct {
@@ -185,6 +189,10 @@ func (req *CustomAPIRequest) initialize() error {
 
 	for key, value := range req.Headers {
 		httpReq.Header.Add(key, value)
+	}
+
+	if req.BasicAuth.Username != "" || req.BasicAuth.Password != "" {
+		httpReq.SetBasicAuth(req.BasicAuth.Username, req.BasicAuth.Password)
 	}
 
 	req.httpRequest = httpReq
@@ -657,6 +665,25 @@ var customAPITemplateFuncs = func() template.FuncMap {
 		"withStringBody": func(body string, req *CustomAPIRequest) *CustomAPIRequest {
 			req.Body = body
 			req.BodyType = "string"
+			return req
+		},
+		"withAllowInsecure": func(val any, req *CustomAPIRequest) *CustomAPIRequest {
+			switch v := val.(type) {
+			case bool:
+				req.AllowInsecure = v
+			case string:
+				if strings.ToLower(v) == "true" {
+					req.AllowInsecure = true
+				}
+			default:
+				slog.Warn("withAllowInsecure called with non-boolean value, must be string or bool", "value", v)
+			}
+
+			return req
+		},
+		"withBasicAuth": func(username, password string, req *CustomAPIRequest) *CustomAPIRequest {
+			req.BasicAuth.Username = username
+			req.BasicAuth.Password = password
 			return req
 		},
 		"getResponse": func(req *CustomAPIRequest) *customAPIResponseData {

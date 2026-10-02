@@ -49,7 +49,7 @@ func (widget *dockerContainersWidget) update(ctx context.Context) {
 		return
 	}
 
-	containers.sortByStateIconThenTitle()
+	containers.sortByStateIconThenName()
 	widget.Containers = containers
 }
 
@@ -125,7 +125,7 @@ type dockerContainer struct {
 
 type dockerContainerList []dockerContainer
 
-func (containers dockerContainerList) sortByStateIconThenTitle() {
+func (containers dockerContainerList) sortByStateIconThenName() {
 	p := &dockerContainerStateIconPriorities
 
 	sort.SliceStable(containers, func(a, b int) bool {
@@ -137,13 +137,17 @@ func (containers dockerContainerList) sortByStateIconThenTitle() {
 	})
 }
 
-func dockerContainerStateToStateIcon(state string) string {
-	switch state {
+func dockerContainerStateToStateIcon(container *dockerContainerJsonResponse) string {
+	if strings.Contains(strings.ToLower(container.Status), "(unhealthy)") {
+		return dockerContainerStateIconWarn
+	}
+
+	switch strings.ToLower(container.State) {
 	case "running":
 		return dockerContainerStateIconOK
 	case "paused":
 		return dockerContainerStateIconPaused
-	case "exited", "unhealthy", "dead":
+	case "exited", "dead":
 		return dockerContainerStateIconWarn
 	default:
 		return dockerContainerStateIconOther
@@ -187,13 +191,13 @@ func fetchDockerContainers(
 					dc.Children = append(dc.Children, dockerContainer{
 						Name:      deriveDockerContainerName(child, formatNames),
 						StateText: child.Status,
-						StateIcon: dockerContainerStateToStateIcon(strings.ToLower(child.State)),
+						StateIcon: dockerContainerStateToStateIcon(child),
 					})
 				}
 			}
 		}
 
-		dc.Children.sortByStateIconThenTitle()
+		dc.Children.sortByStateIconThenName()
 
 		stateIconSupersededByChild := false
 		for i := range dc.Children {
@@ -204,7 +208,7 @@ func fetchDockerContainers(
 			}
 		}
 		if !stateIconSupersededByChild {
-			dc.StateIcon = dockerContainerStateToStateIcon(dc.State)
+			dc.StateIcon = dockerContainerStateToStateIcon(container)
 		}
 
 		dockerContainers = append(dockerContainers, dc)
@@ -278,7 +282,6 @@ func isDockerContainerHidden(container *dockerContainerJsonResponse, hideByDefau
 	return hideByDefault
 }
 
-
 func fetchDockerContainersFromSource(
 	source string,
 	category string,
@@ -286,22 +289,33 @@ func fetchDockerContainersFromSource(
 	labelOverrides map[string]map[string]string,
 ) ([]dockerContainerJsonResponse, error) {
 	var hostname string
+	var scheme string
 
 	var client *http.Client
-	if strings.HasPrefix(source, "tcp://") || strings.HasPrefix(source, "http://") {
+	if strings.HasPrefix(source, "tcp://") || strings.HasPrefix(source, "http://") || strings.HasPrefix(source, "https://") {
 		client = &http.Client{}
 		parsed, err := url.Parse(source)
 		if err != nil {
 			return nil, fmt.Errorf("parsing URL: %w", err)
 		}
 
+		scheme = parsed.Scheme
+		if scheme == "tcp" {
+			scheme = "http"
+		}
+
 		port := parsed.Port()
 		if port == "" {
-			port = "80"
+			if scheme == "https" {
+				port = "443"
+			} else {
+				port = "80"
+			}
 		}
 
 		hostname = parsed.Hostname() + ":" + port
 	} else {
+		scheme = "http"
 		hostname = "docker"
 		client = &http.Client{
 			Transport: &http.Transport{
@@ -312,12 +326,11 @@ func fetchDockerContainersFromSource(
 		}
 	}
 
-
 	fetchAll := ternary(runningOnly, "false", "true")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	request, err := http.NewRequestWithContext(ctx, "GET", "http://"+hostname+"/containers/json?all="+fetchAll, nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", scheme+"://"+hostname+"/containers/json?all="+fetchAll, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
