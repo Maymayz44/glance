@@ -59,6 +59,16 @@ func setBrowserUserAgentHeader(request *http.Request) {
 	request.Header.Set("User-Agent", getBrowserUserAgentHeader())
 }
 
+type unexpectedStatusCodeError struct {
+	StatusCode int
+	URL        string
+	Body       string
+}
+
+func (e *unexpectedStatusCodeError) Error() string {
+	return fmt.Sprintf("unexpected status code %d from %s, response: %s", e.StatusCode, e.URL, e.Body)
+}
+
 func decodeJsonFromRequest[T any](client requestDoer, request *http.Request) (T, error) {
 	var result T
 
@@ -76,12 +86,11 @@ func decodeJsonFromRequest[T any](client requestDoer, request *http.Request) (T,
 	if response.StatusCode != http.StatusOK {
 		truncatedBody, _ := limitStringLength(string(body), 256)
 
-		return result, fmt.Errorf(
-			"unexpected status code %d from %s, response: %s",
-			response.StatusCode,
-			request.URL,
-			truncatedBody,
-		)
+		return result, &unexpectedStatusCodeError{
+			StatusCode: response.StatusCode,
+			URL:        request.URL.String(),
+			Body:       truncatedBody,
+		}
 	}
 
 	err = json.Unmarshal(body, &result)
