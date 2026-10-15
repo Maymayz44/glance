@@ -11,7 +11,7 @@
             <div class="color-highlight size-h3">{{ .Stats.BlockedPercent }}%</div>
             <div class="size-h6">BLOCKED</div>
         </div>
-        {{ if gt .Stats.ResponseTime 0 }}
+        {{ if eq .Service "adguard" }}
         <div>
             <div class="color-highlight size-h3">{{ .Stats.ResponseTime | formatNumber }}ms</div>
             <div class="size-h6">LATENCY</div>
